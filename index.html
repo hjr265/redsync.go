@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="Redsync.go : Redis-based distributed mutual exclusion lock implementation for Go" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Redsync.go</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/hjr265/redsync.go">View on GitHub</a>
+
+          <h1 id="project_title">Redsync.go</h1>
+          <h2 id="project_tagline">Redis-based distributed mutual exclusion lock implementation for Go</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/hjr265/redsync.go/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/hjr265/redsync.go/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
+<a name="redsyncgo" class="anchor" href="#redsyncgo"><span class="octicon octicon-link"></span></a>Redsync.go</h1>
+
+<p>Redsync.go provides a Redis-based distributed mutual exclusion lock implementation for Go as described in <a href="http://antirez.com/news/77">this</a> blog post. A reference library (by <a href="https://github.com/antirez">antirez</a>) for Ruby is available at <a href="https://github.com/antirez/redlock-rb">github.com/antirez/redlock-rb</a>.</p>
+
+<h2>
+<a name="installation" class="anchor" href="#installation"><span class="octicon octicon-link"></span></a>Installation</h2>
+
+<p>Install Redsync.go using the go get command:</p>
+
+<pre><code>$ go get github.com/hjr265/redsync.go/redsync
+</code></pre>
+
+<p>The only dependencies are the Go distribution and <code>github.com/fzzy/radix/redis</code>.</p>
+
+<h2>
+<a name="documentation" class="anchor" href="#documentation"><span class="octicon octicon-link"></span></a>Documentation</h2>
+
+<ul>
+<li><a href="http://godoc.org/github.com/hjr265/redsync.go/redsync">Reference</a></li>
+</ul><h2>
+<a name="contributing" class="anchor" href="#contributing"><span class="octicon octicon-link"></span></a>Contributing</h2>
+
+<p>Contributions are welcome.</p>
+
+<h2>
+<a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>License</h2>
+
+<p>Redsync.go is available under the <a href="http://www.apache.org/licenses/LICENSE-2.0.html">Apache License, version 2.0</a>.</p>
+
+<h2>
+<a name="disclaimer" class="anchor" href="#disclaimer"><span class="octicon octicon-link"></span></a>Disclaimer</h2>
+
+<p>This code implements an algorithm which is currently a proposal, it was not formally analyzed. Make sure to understand how it works before using it in production environments.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Redsync.go maintained by <a href="https://github.com/hjr265">hjr265</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
