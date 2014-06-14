@@ -59,10 +59,7 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 
 	nodes := []*redis.Client{}
 	for _, addr := range addrs {
-		node, err := redis.Dial(addr.Network(), addr.String())
-		if err != nil {
-			return nil, err
-		}
+		node, _ := redis.Dial(addr.Network(), addr.String())
 		nodes = append(nodes, node)
 	}
 
@@ -99,9 +96,13 @@ func (m *Mutex) Lock() error {
 		n := 0
 		start := time.Now()
 		for _, node := range m.nodes {
+			if node == nil {
+				continue
+			}
+
 			reply := node.Cmd("set", m.Name, value, "nx", "px", int(expiry/time.Millisecond))
 			if reply.Err != nil {
-				return reply.Err
+				continue
 			}
 			if reply.String() != "OK" {
 				continue
@@ -121,6 +122,10 @@ func (m *Mutex) Lock() error {
 			return nil
 		} else {
 			for _, node := range m.nodes {
+				if node == nil {
+					continue
+				}
+
 				reply := node.Cmd("eval", `
 					if redis.call("get", KEYS[1]) == ARGV[1] then
 					    return redis.call("del", KEYS[1])
@@ -129,7 +134,7 @@ func (m *Mutex) Lock() error {
 					end
 				`, 1, m.Name, value)
 				if reply.Err != nil {
-					return reply.Err
+					continue
 				}
 			}
 		}
@@ -159,6 +164,10 @@ func (m *Mutex) Unlock() {
 	m.until = time.Unix(0, 0)
 
 	for _, node := range m.nodes {
+		if node == nil {
+			continue
+		}
+
 		node.Cmd("eval", `
 			if redis.call("get", KEYS[1]) == ARGV[1] then
 			    return redis.call("del", KEYS[1])
