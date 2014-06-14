@@ -42,6 +42,8 @@ type Mutex struct {
 
 	Factor float64 // Drift factor, DefaultFactor if 0
 
+	Quorum int // Quorum for the lock, set to len(addrs)/2+1 by NewMutex()
+
 	value string
 	until time.Time
 
@@ -64,8 +66,9 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 	}
 
 	return &Mutex{
-		Name:  name,
-		nodes: nodes,
+		Name:   name,
+		Quorum: len(addrs)/2 + 1,
+		nodes:  nodes,
 	}, nil
 }
 
@@ -116,7 +119,7 @@ func (m *Mutex) Lock() error {
 		}
 
 		until := time.Now().Add(m.Expiry - time.Now().Sub(start) - time.Duration(int64(float64(m.Expiry)*factor)) + 2*time.Millisecond)
-		if n >= len(m.nodes)/2+1 && time.Now().Before(until) {
+		if n >= m.Quorum && time.Now().Before(until) {
 			m.value = value
 			m.until = until
 			return nil
