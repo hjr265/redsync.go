@@ -42,6 +42,8 @@ type Mutex struct {
 
 	Factor float64 // Drift factor, DefaultFactor if 0
 
+	Quorum int // Quorum for the lock, set to len(addrs)/2+1 by NewMutex()
+
 	value string
 	until time.Time
 
@@ -59,16 +61,14 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 
 	nodes := []*redis.Client{}
 	for _, addr := range addrs {
-		node, err := redis.Dial(addr.Network(), addr.String())
-		if err != nil {
-			return nil, err
-		}
+		node, _ := redis.Dial(addr.Network(), addr.String())
 		nodes = append(nodes, node)
 	}
 
 	return &Mutex{
-		Name:  name,
-		nodes: nodes,
+		Name:   name,
+		Quorum: len(addrs)/2 + 1,
+		nodes:  nodes,
 	}, nil
 }
 
@@ -99,9 +99,13 @@ func (m *Mutex) Lock() error {
 		n := 0
 		start := time.Now()
 		for _, node := range m.nodes {
+			if node == nil {
+				continue
+			}
+
 			reply := node.Cmd("set", m.Name, value, "nx", "px", int(expiry/time.Millisecond))
 			if reply.Err != nil {
-				return reply.Err
+				continue
 			}
 			if reply.String() != "OK" {
 				continue
@@ -115,12 +119,16 @@ func (m *Mutex) Lock() error {
 		}
 
 		until := time.Now().Add(m.Expiry - time.Now().Sub(start) - time.Duration(int64(float64(m.Expiry)*factor)) + 2*time.Millisecond)
-		if n >= len(m.nodes)/2+1 && time.Now().Before(until) {
+		if n >= m.Quorum && time.Now().Before(until) {
 			m.value = value
 			m.until = until
 			return nil
 		} else {
 			for _, node := range m.nodes {
+				if node == nil {
+					continue
+				}
+
 				reply := node.Cmd("eval", `
 					if redis.call("get", KEYS[1]) == ARGV[1] then
 					    return redis.call("del", KEYS[1])
@@ -129,7 +137,7 @@ func (m *Mutex) Lock() error {
 					end
 				`, 1, m.Name, value)
 				if reply.Err != nil {
-					return reply.Err
+					continue
 				}
 			}
 		}
@@ -159,6 +167,10 @@ func (m *Mutex) Unlock() {
 	m.until = time.Unix(0, 0)
 
 	for _, node := range m.nodes {
+		if node == nil {
+			continue
+		}
+
 		node.Cmd("eval", `
 			if redis.call("get", KEYS[1]) == ARGV[1] then
 			    return redis.call("del", KEYS[1])
