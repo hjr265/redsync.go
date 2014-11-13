@@ -118,7 +118,7 @@ func (m *Mutex) Lock() error {
 			factor = DefaultFactor
 		}
 
-		until := time.Now().Add(m.Expiry - time.Now().Sub(start) - time.Duration(int64(float64(m.Expiry)*factor)) + 2*time.Millisecond)
+		until := time.Now().Add(expiry - time.Now().Sub(start) - time.Duration(int64(float64(expiry)*factor)) + 2*time.Millisecond)
 		if n >= m.Quorum && time.Now().Before(until) {
 			m.value = value
 			m.until = until
