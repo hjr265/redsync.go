@@ -53,12 +53,8 @@ type Mutex struct {
 	value string
 	until time.Time
 
-	nodes []poolGetter
+	nodes []*redis.Pool
 	nodem sync.Mutex
-}
-
-type poolGetter interface {
-	Get() redis.Conn
 }
 
 var _ = Locker(&Mutex{})
@@ -69,7 +65,7 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 		panic("redsync: addrs is empty")
 	}
 
-	nodes := make([]poolGetter, len(addrs))
+	nodes := make([]*redis.Pool, len(addrs))
 	for i, addr := range addrs {
 		dialTo := addr
 		node := &redis.Pool{
@@ -82,9 +78,18 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 		nodes[i] = node
 	}
 
+	return NewMutexWithPool(name, nodes)
+}
+
+// NewMutexWithPool returns a new Mutex on a named resource connected to the Redis instances at given redis Pools.
+func NewMutexWithPool(name string, nodes []*redis.Pool) (*Mutex, error) {
+	if len(nodes) == 0 {
+		panic("redsync: nodes is empty")
+	}
+
 	return &Mutex{
 		Name:   name,
-		Quorum: len(addrs)/2 + 1,
+		Quorum: len(nodes)/2 + 1,
 		nodes:  nodes,
 	}, nil
 }
