@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fzzy/radix/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 const (
@@ -53,8 +53,12 @@ type Mutex struct {
 	value string
 	until time.Time
 
-	nodes []*redis.Client
+	nodes []poolGetter
 	nodem sync.Mutex
+}
+
+type poolGetter interface {
+	Get() redis.Conn
 }
 
 var _ = Locker(&Mutex{})
@@ -65,10 +69,17 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 		panic("redsync: addrs is empty")
 	}
 
-	nodes := []*redis.Client{}
-	for _, addr := range addrs {
-		node, _ := redis.Dial(addr.Network(), addr.String())
-		nodes = append(nodes, node)
+	nodes := make([]poolGetter, len(addrs))
+	for i, addr := range addrs {
+		dialTo := addr
+		node := &redis.Pool{
+			MaxActive: 1,
+			Wait:      true,
+			Dial: func() (redis.Conn, error) {
+				return redis.Dial("tcp", "127.0.0.1"+dialTo.String())
+			},
+		}
+		nodes[i] = node
 	}
 
 	return &Mutex{
@@ -109,11 +120,13 @@ func (m *Mutex) Lock() error {
 				continue
 			}
 
-			reply := node.Cmd("set", m.Name, value, "nx", "px", int(expiry/time.Millisecond))
-			if reply.Err != nil {
+			conn := node.Get()
+			reply, err := redis.String(conn.Do("set", m.Name, value, "nx", "px", int(expiry/time.Millisecond)))
+			conn.Close()
+			if err != nil {
 				continue
 			}
-			if reply.String() != "OK" {
+			if reply != "OK" {
 				continue
 			}
 			n++
@@ -135,14 +148,10 @@ func (m *Mutex) Lock() error {
 				continue
 			}
 
-			reply := node.Cmd("eval", `
-			if redis.call("get", KEYS[1]) == ARGV[1] then
-			return redis.call("del", KEYS[1])
-			else
-			return 0
-			end
-			`, 1, m.Name, value)
-			if reply.Err != nil {
+			conn := node.Get()
+			_, err := delScript.Do(conn, m.Name, value)
+			conn.Close()
+			if err != nil {
 				continue
 			}
 		}
@@ -176,12 +185,15 @@ func (m *Mutex) Unlock() {
 			continue
 		}
 
-		node.Cmd("eval", `
-			if redis.call("get", KEYS[1]) == ARGV[1] then
-			    return redis.call("del", KEYS[1])
-			else
-			    return 0
-			end
-		`, 1, m.Name, value)
+		conn := node.Get()
+		delScript.Do(conn, m.Name, value)
+		conn.Close()
 	}
 }
+
+var delScript = redis.NewScript(1, `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+	return redis.call("del", KEYS[1])
+else
+	return 0
+end`)
