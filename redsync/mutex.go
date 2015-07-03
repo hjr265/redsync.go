@@ -15,16 +15,22 @@ import (
 )
 
 const (
+	// DefaultExpiry is used when Mutex Duration is 0
 	DefaultExpiry = 8 * time.Second
-	DefaultTries  = 16
-	DefaultDelay  = 512 * time.Millisecond
+	// DefaultTries is used when Mutex Duration is 0
+	DefaultTries = 16
+	// DefaultDelay is used when Mutex Delay is 0
+	DefaultDelay = 512 * time.Millisecond
+	// DefaultFactor is used when Mutex Factor is 0
 	DefaultFactor = 0.01
 )
 
 var (
+	// ErrFailed is returned when lock cannot be acquired
 	ErrFailed = errors.New("failed to acquire lock")
 )
 
+// Locker interface with Lock returning an error when lock cannot be aquired
 type Locker interface {
 	Lock() error
 	Unlock()
@@ -110,7 +116,7 @@ func (m *Mutex) Lock() error {
 			if reply.String() != "OK" {
 				continue
 			}
-			n += 1
+			n++
 		}
 
 		factor := m.Factor
@@ -123,22 +129,21 @@ func (m *Mutex) Lock() error {
 			m.value = value
 			m.until = until
 			return nil
-		} else {
-			for _, node := range m.nodes {
-				if node == nil {
-					continue
-				}
+		}
+		for _, node := range m.nodes {
+			if node == nil {
+				continue
+			}
 
-				reply := node.Cmd("eval", `
-					if redis.call("get", KEYS[1]) == ARGV[1] then
-					    return redis.call("del", KEYS[1])
-					else
-					    return 0
-					end
-				`, 1, m.Name, value)
-				if reply.Err != nil {
-					continue
-				}
+			reply := node.Cmd("eval", `
+			if redis.call("get", KEYS[1]) == ARGV[1] then
+			return redis.call("del", KEYS[1])
+			else
+			return 0
+			end
+			`, 1, m.Name, value)
+			if reply.Err != nil {
+				continue
 			}
 		}
 

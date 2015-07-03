@@ -32,7 +32,7 @@ func TestMutex(t *testing.T) {
 			for j := 0; j < 32; j++ {
 				err := m.Lock()
 				if err == redsync.ErrFailed {
-					f += 1
+					f++
 					if f > 2 {
 						chErr <- err
 						return
