@@ -11,20 +11,26 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fzzy/radix/redis"
+	"github.com/garyburd/redigo/redis"
 )
 
 const (
+	// DefaultExpiry is used when Mutex Duration is 0
 	DefaultExpiry = 8 * time.Second
-	DefaultTries  = 16
-	DefaultDelay  = 512 * time.Millisecond
+	// DefaultTries is used when Mutex Duration is 0
+	DefaultTries = 16
+	// DefaultDelay is used when Mutex Delay is 0
+	DefaultDelay = 512 * time.Millisecond
+	// DefaultFactor is used when Mutex Factor is 0
 	DefaultFactor = 0.01
 )
 
 var (
+	// ErrFailed is returned when lock cannot be acquired
 	ErrFailed = errors.New("failed to acquire lock")
 )
 
+// Locker interface with Lock returning an error when lock cannot be aquired
 type Locker interface {
 	Lock() error
 	Unlock()
@@ -47,7 +53,7 @@ type Mutex struct {
 	value string
 	until time.Time
 
-	nodes []*redis.Client
+	nodes []*redis.Pool
 	nodem sync.Mutex
 }
 
@@ -59,15 +65,31 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 		panic("redsync: addrs is empty")
 	}
 
-	nodes := []*redis.Client{}
-	for _, addr := range addrs {
-		node, _ := redis.Dial(addr.Network(), addr.String())
-		nodes = append(nodes, node)
+	nodes := make([]*redis.Pool, len(addrs))
+	for i, addr := range addrs {
+		dialTo := addr
+		node := &redis.Pool{
+			MaxActive: 1,
+			Wait:      true,
+			Dial: func() (redis.Conn, error) {
+				return redis.Dial("tcp", "127.0.0.1"+dialTo.String())
+			},
+		}
+		nodes[i] = node
+	}
+
+	return NewMutexWithPool(name, nodes)
+}
+
+// NewMutexWithPool returns a new Mutex on a named resource connected to the Redis instances at given redis Pools.
+func NewMutexWithPool(name string, nodes []*redis.Pool) (*Mutex, error) {
+	if len(nodes) == 0 {
+		panic("redsync: nodes is empty")
 	}
 
 	return &Mutex{
 		Name:   name,
-		Quorum: len(addrs)/2 + 1,
+		Quorum: len(nodes)/2 + 1,
 		nodes:  nodes,
 	}, nil
 }
@@ -103,14 +125,16 @@ func (m *Mutex) Lock() error {
 				continue
 			}
 
-			reply := node.Cmd("set", m.Name, value, "nx", "px", int(expiry/time.Millisecond))
-			if reply.Err != nil {
+			conn := node.Get()
+			reply, err := redis.String(conn.Do("set", m.Name, value, "nx", "px", int(expiry/time.Millisecond)))
+			conn.Close()
+			if err != nil {
 				continue
 			}
-			if reply.String() != "OK" {
+			if reply != "OK" {
 				continue
 			}
-			n += 1
+			n++
 		}
 
 		factor := m.Factor
@@ -123,22 +147,17 @@ func (m *Mutex) Lock() error {
 			m.value = value
 			m.until = until
 			return nil
-		} else {
-			for _, node := range m.nodes {
-				if node == nil {
-					continue
-				}
+		}
+		for _, node := range m.nodes {
+			if node == nil {
+				continue
+			}
 
-				reply := node.Cmd("eval", `
-					if redis.call("get", KEYS[1]) == ARGV[1] then
-					    return redis.call("del", KEYS[1])
-					else
-					    return 0
-					end
-				`, 1, m.Name, value)
-				if reply.Err != nil {
-					continue
-				}
+			conn := node.Get()
+			_, err := delScript.Do(conn, m.Name, value)
+			conn.Close()
+			if err != nil {
+				continue
 			}
 		}
 
@@ -171,12 +190,15 @@ func (m *Mutex) Unlock() {
 			continue
 		}
 
-		node.Cmd("eval", `
-			if redis.call("get", KEYS[1]) == ARGV[1] then
-			    return redis.call("del", KEYS[1])
-			else
-			    return 0
-			end
-		`, 1, m.Name, value)
+		conn := node.Get()
+		delScript.Do(conn, m.Name, value)
+		conn.Close()
 	}
 }
+
+var delScript = redis.NewScript(1, `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+	return redis.call("del", KEYS[1])
+else
+	return 0
+end`)

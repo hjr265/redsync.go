@@ -3,10 +3,13 @@ package redsync_test
 import (
 	"math/rand"
 	"net"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hjr265/redsync.go/redsync"
+	"github.com/stvp/tempredis"
 )
 
 var addrs = []net.Addr{
@@ -14,6 +17,27 @@ var addrs = []net.Addr{
 	&net.TCPAddr{Port: 63791},
 	&net.TCPAddr{Port: 63792},
 	&net.TCPAddr{Port: 63793},
+}
+
+var servers []*tempredis.Server
+
+func TestMain(m *testing.M) {
+	servers = make([]*tempredis.Server, len(addrs))
+	for i, addr := range addrs {
+		parts := strings.Split(addr.String(), ":")
+		port := parts[1]
+		server, err := tempredis.Start(tempredis.Config{"port": port})
+		if err != nil {
+			panic(err)
+		}
+		defer server.Kill()
+		servers[i] = server
+	}
+	result := m.Run()
+	for _, server := range servers {
+		server.Kill()
+	}
+	os.Exit(result)
 }
 
 func TestMutex(t *testing.T) {
@@ -32,7 +56,7 @@ func TestMutex(t *testing.T) {
 			for j := 0; j < 32; j++ {
 				err := m.Lock()
 				if err == redsync.ErrFailed {
-					f += 1
+					f++
 					if f > 2 {
 						chErr <- err
 						return
