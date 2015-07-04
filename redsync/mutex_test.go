@@ -30,12 +30,12 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			panic(err)
 		}
-		defer server.Kill()
+		defer server.Term()
 		servers[i] = server
 	}
 	result := m.Run()
 	for _, server := range servers {
-		server.Kill()
+		server.Term()
 	}
 	os.Exit(result)
 }
