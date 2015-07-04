@@ -72,7 +72,7 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 			MaxActive: 1,
 			Wait:      true,
 			Dial: func() (redis.Conn, error) {
-				return redis.Dial("tcp", "127.0.0.1"+dialTo.String())
+				return redis.Dial("tcp", dialTo.String())
 			},
 		}
 		nodes[i] = node
