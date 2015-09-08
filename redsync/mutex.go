@@ -85,19 +85,38 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 		nodes[i] = Pool(node)
 	}
 
-	return NewMutexWithPool(name, nodes)
+	return NewMutexWithGenericPool(name, nodes)
 }
 
 // NewMutexWithPool returns a new Mutex on a named resource connected to the Redis instances at given redis Pools.
-func NewMutexWithPool(name string, nodes []Pool) (*Mutex, error) {
+func NewMutexWithPool(name string, nodes []*redis.Pool) (*Mutex, error) {
 	if len(nodes) == 0 {
 		panic("redsync: nodes is empty")
 	}
 
+	genericNodes := make([]Pool, len(nodes))
+	for i, node := range nodes {
+		genericNodes[i] = Pool(node)
+	}
+
 	return &Mutex{
 		Name:   name,
-		Quorum: len(nodes)/2 + 1,
-		nodes:  nodes,
+		Quorum: len(genericNodes)/2 + 1,
+		nodes:  genericNodes,
+	}, nil
+}
+
+// NewMutexWithGenericPool returns a new Mutex on a named resource connected to the Redis instances at given generic Pools.
+// different from NewMutexWithPool to maintain backwards compatibility
+func NewMutexWithGenericPool(name string, genericNodes []Pool) (*Mutex, error) {
+	if len(genericNodes) == 0 {
+		panic("redsync: genericNodes is empty")
+	}
+
+	return &Mutex{
+		Name:   name,
+		Quorum: len(genericNodes)/2 + 1,
+		nodes:  genericNodes,
 	}, nil
 }
 
