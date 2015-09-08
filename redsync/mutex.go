@@ -36,6 +36,12 @@ type Locker interface {
 	Unlock()
 }
 
+type Pool interface {
+	Get() redis.Conn
+}
+
+var _ = Pool(&redis.Pool{})
+
 // A Mutex is a mutual exclusion lock.
 //
 // Fields of a Mutex must not be changed after first use.
@@ -53,7 +59,7 @@ type Mutex struct {
 	value string
 	until time.Time
 
-	nodes []*redis.Pool
+	nodes []Pool
 	nodem sync.Mutex
 }
 
@@ -65,7 +71,7 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 		panic("redsync: addrs is empty")
 	}
 
-	nodes := make([]*redis.Pool, len(addrs))
+	nodes := make([]Pool, len(addrs))
 	for i, addr := range addrs {
 		dialTo := addr
 		node := &redis.Pool{
@@ -75,14 +81,14 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 				return redis.Dial("tcp", dialTo.String())
 			},
 		}
-		nodes[i] = node
+		nodes[i] = Pool(node)
 	}
 
 	return NewMutexWithPool(name, nodes)
 }
 
 // NewMutexWithPool returns a new Mutex on a named resource connected to the Redis instances at given redis Pools.
-func NewMutexWithPool(name string, nodes []*redis.Pool) (*Mutex, error) {
+func NewMutexWithPool(name string, nodes []Pool) (*Mutex, error) {
 	if len(nodes) == 0 {
 		panic("redsync: nodes is empty")
 	}
