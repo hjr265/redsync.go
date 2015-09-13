@@ -36,6 +36,13 @@ type Locker interface {
 	Unlock()
 }
 
+// Pool is a generic connection pool
+type Pool interface {
+	Get() redis.Conn
+}
+
+var _ = Pool(&redis.Pool{})
+
 // A Mutex is a mutual exclusion lock.
 //
 // Fields of a Mutex must not be changed after first use.
@@ -53,7 +60,7 @@ type Mutex struct {
 	value string
 	until time.Time
 
-	nodes []*redis.Pool
+	nodes []Pool
 	nodem sync.Mutex
 }
 
@@ -65,7 +72,7 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 		panic("redsync: addrs is empty")
 	}
 
-	nodes := make([]*redis.Pool, len(addrs))
+	nodes := make([]Pool, len(addrs))
 	for i, addr := range addrs {
 		dialTo := addr
 		node := &redis.Pool{
@@ -75,10 +82,10 @@ func NewMutex(name string, addrs []net.Addr) (*Mutex, error) {
 				return redis.Dial("tcp", dialTo.String())
 			},
 		}
-		nodes[i] = node
+		nodes[i] = Pool(node)
 	}
 
-	return NewMutexWithPool(name, nodes)
+	return NewMutexWithGenericPool(name, nodes)
 }
 
 // NewMutexWithPool returns a new Mutex on a named resource connected to the Redis instances at given redis Pools.
@@ -87,10 +94,29 @@ func NewMutexWithPool(name string, nodes []*redis.Pool) (*Mutex, error) {
 		panic("redsync: nodes is empty")
 	}
 
+	genericNodes := make([]Pool, len(nodes))
+	for i, node := range nodes {
+		genericNodes[i] = Pool(node)
+	}
+
 	return &Mutex{
 		Name:   name,
-		Quorum: len(nodes)/2 + 1,
-		nodes:  nodes,
+		Quorum: len(genericNodes)/2 + 1,
+		nodes:  genericNodes,
+	}, nil
+}
+
+// NewMutexWithGenericPool returns a new Mutex on a named resource connected to the Redis instances at given generic Pools.
+// different from NewMutexWithPool to maintain backwards compatibility
+func NewMutexWithGenericPool(name string, genericNodes []Pool) (*Mutex, error) {
+	if len(genericNodes) == 0 {
+		panic("redsync: genericNodes is empty")
+	}
+
+	return &Mutex{
+		Name:   name,
+		Quorum: len(genericNodes)/2 + 1,
+		nodes:  genericNodes,
 	}, nil
 }
 
