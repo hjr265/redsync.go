@@ -10,7 +10,7 @@ Install Redsync.go using the go get command:
 
     $ go get github.com/hjr265/redsync.go/redsync
 
-The only dependencies are the Go distribution and `github.com/fzzy/radix/redis`.
+The only dependencies are the Go distribution and `github.com/garyburd/redigo/redis`.
 
 ## Documentation
 
