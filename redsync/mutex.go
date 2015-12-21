@@ -33,7 +33,8 @@ var (
 // Locker interface with Lock returning an error when lock cannot be aquired
 type Locker interface {
 	Lock() error
-	Unlock()
+	Touch() bool
+	Unlock() bool
 }
 
 // Pool is a generic connection pool
@@ -197,9 +198,51 @@ func (m *Mutex) Lock() error {
 	return ErrFailed
 }
 
+// Touch resets m's expiry to the expiry value.
+// It is a run-time error if m is not locked on entry to Touch.
+// It returns the status of the touch
+func (m *Mutex) Touch() bool {
+	m.nodem.Lock()
+	defer m.nodem.Unlock()
+
+	value := m.value
+	if value == "" {
+		panic("redsync: touch of unlocked mutex")
+	}
+
+	expiry := m.Expiry
+	if expiry == 0 {
+		expiry = DefaultExpiry
+	}
+	reset := int(expiry / time.Millisecond)
+
+	n := 0
+	for _, node := range m.nodes {
+		if node == nil {
+			continue
+		}
+
+		conn := node.Get()
+		reply, err := touchScript.Do(conn, m.Name, value, reset)
+		conn.Close()
+		if err != nil {
+			continue
+		}
+		if reply != "OK" {
+			continue
+		}
+		n++
+	}
+	if n >= m.Quorum {
+		return true
+	}
+	return false
+}
+
 // Unlock unlocks m.
 // It is a run-time error if m is not locked on entry to Unlock.
-func (m *Mutex) Unlock() {
+// It returns the status of the unlock
+func (m *Mutex) Unlock() bool {
 	m.nodem.Lock()
 	defer m.nodem.Unlock()
 
@@ -211,15 +254,27 @@ func (m *Mutex) Unlock() {
 	m.value = ""
 	m.until = time.Unix(0, 0)
 
+	n := 0
 	for _, node := range m.nodes {
 		if node == nil {
 			continue
 		}
 
 		conn := node.Get()
-		delScript.Do(conn, m.Name, value)
+		status, err := delScript.Do(conn, m.Name, value)
 		conn.Close()
+		if err != nil {
+			continue
+		}
+		if status == 0 {
+			continue
+		}
+		n++
 	}
+	if n >= m.Quorum {
+		return true
+	}
+	return false
 }
 
 var delScript = redis.NewScript(1, `
@@ -227,4 +282,11 @@ if redis.call("get", KEYS[1]) == ARGV[1] then
 	return redis.call("del", KEYS[1])
 else
 	return 0
+end`)
+
+var touchScript = redis.NewScript(1, `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+	return redis.call("set", KEYS[1], ARGV[1], "xx", "px", ARGV[2])
+else
+	return "ERR"
 end`)
