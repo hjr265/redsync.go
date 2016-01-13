@@ -85,3 +85,45 @@ func TestMutex(t *testing.T) {
 		}
 	}
 }
+
+func TestMutexWithRedSync(t *testing.T) {
+	done := make(chan bool)
+	chErr := make(chan error)
+
+	rs := redsync.New(addrs)
+	for i := 0; i < 4; i++ {
+		go func() {
+			m := rs.NewMutex("RedsyncMutex2")
+			f := 0
+			for j := 0; j < 32; j++ {
+				err := m.Lock()
+				if err == redsync.ErrFailed {
+					f++
+					if f > 2 {
+						chErr <- err
+						return
+					}
+					continue
+				}
+				if err != nil {
+					chErr <- err
+					return
+				}
+
+				time.Sleep(1 * time.Millisecond)
+
+				m.Unlock()
+
+				time.Sleep(time.Duration(rand.Int31n(128)) * time.Millisecond)
+			}
+			done <- true
+		}()
+	}
+	for i := 0; i < 4; i++ {
+		select {
+		case <-done:
+		case err := <-chErr:
+			t.Fatal(err)
+		}
+	}
+}
