@@ -121,6 +121,38 @@ func NewMutexWithGenericPool(name string, genericNodes []Pool) (*Mutex, error) {
 	}, nil
 }
 
+// RedSync provides mutex handling via a multiple Redis connection pools.
+type RedSync struct {
+	pools []Pool
+}
+
+// New creates and returns a new RedSync instance from given network addresses.
+func New(addrs []net.Addr) *RedSync {
+	pools := make([]Pool, len(addrs))
+	for i, addr := range addrs {
+		dialTo := addr
+		node := &redis.Pool{
+			MaxActive: 1,
+			Wait:      true,
+			Dial: func() (redis.Conn, error) {
+				return redis.Dial("tcp", dialTo.String())
+			},
+		}
+		pools[i] = Pool(node)
+	}
+
+	return &RedSync{pools}
+}
+
+// NewMutex returns a new Mutex with the given name.
+func (r *RedSync) NewMutex(name string) *Mutex {
+	return &Mutex{
+		Name:   name,
+		Quorum: len(r.pools)/2 + 1,
+		nodes:  r.pools,
+	}
+}
+
 // Lock locks m.
 // In case it returns an error on failure, you may retry to acquire the lock by calling this method again.
 func (m *Mutex) Lock() error {
