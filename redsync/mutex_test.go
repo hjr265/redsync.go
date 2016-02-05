@@ -2,37 +2,28 @@ package redsync_test
 
 import (
 	"math/rand"
-	"net"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/garyburd/redigo/redis"
 	"github.com/hjr265/redsync.go/redsync"
 	"github.com/stvp/tempredis"
 )
 
-var addrs = []net.Addr{
-	&net.TCPAddr{Port: 63790},
-	&net.TCPAddr{Port: 63791},
-	&net.TCPAddr{Port: 63792},
-	&net.TCPAddr{Port: 63793},
-}
-
 var servers []*tempredis.Server
+var pools []redsync.Pool
 
 func TestMain(m *testing.M) {
-	servers = make([]*tempredis.Server, len(addrs))
-	for i, addr := range addrs {
-		parts := strings.Split(addr.String(), ":")
-		port := parts[1]
-		server, err := tempredis.Start(tempredis.Config{"port": port})
+	for i := 0; i < 4; i++ {
+		server, err := tempredis.Start(tempredis.Config{})
 		if err != nil {
 			panic(err)
 		}
 		defer server.Term()
-		servers[i] = server
+		servers = append(servers, server)
 	}
+	pools = makeTestPools()
 	result := m.Run()
 	for _, server := range servers {
 		server.Term()
@@ -46,7 +37,7 @@ func TestMutex(t *testing.T) {
 
 	for i := 0; i < 4; i++ {
 		go func() {
-			m, err := redsync.NewMutex("RedsyncMutex", addrs)
+			m, err := redsync.NewMutexWithGenericPool("RedsyncMutex", pools)
 			if err != nil {
 				chErr <- err
 				return
@@ -90,7 +81,7 @@ func TestMutexWithRedSync(t *testing.T) {
 	done := make(chan bool)
 	chErr := make(chan error)
 
-	rs := redsync.New(addrs)
+	rs := redsync.NewWithGenericPool(pools)
 	for i := 0; i < 4; i++ {
 		go func() {
 			m := rs.NewMutex("RedsyncMutex2")
@@ -126,4 +117,24 @@ func TestMutexWithRedSync(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func makeTestPools() []redsync.Pool {
+	pools := []redsync.Pool{}
+	for _, server := range servers {
+		func(server *tempredis.Server) {
+			pools = append(pools, &redis.Pool{
+				MaxIdle:     3,
+				IdleTimeout: 240 * time.Second,
+				Dial: func() (redis.Conn, error) {
+					return redis.Dial("unix", server.Socket())
+				},
+				TestOnBorrow: func(c redis.Conn, t time.Time) error {
+					_, err := c.Do("PING")
+					return err
+				},
+			})
+		}(server)
+	}
+	return pools
 }

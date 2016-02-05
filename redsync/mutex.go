@@ -144,6 +144,17 @@ func New(addrs []net.Addr) *RedSync {
 	return &RedSync{pools}
 }
 
+// NewWithGenericPool creates and returns a new RedSync instance from given generic Pools.
+func NewWithGenericPool(genericNodes []Pool) *RedSync {
+	if len(genericNodes) == 0 {
+		panic("redsync: genericNodes is empty")
+	}
+
+	return &RedSync{
+		pools: genericNodes,
+	}
+}
+
 // NewMutex returns a new Mutex with the given name.
 func (r *RedSync) NewMutex(name string) *Mutex {
 	return &Mutex{
