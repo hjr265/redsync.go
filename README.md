@@ -1,5 +1,7 @@
 # Redsync.go
 
+**This package is being replaced with https://gopkg.in/redsync.v1. I will continue to maintain this package for a while so that its users do not feel abandoned. But I request everyone to gradually switch to the other package which will be maintained more actively.**
+
 [![Build Status](https://drone.io/github.com/hjr265/redsync.go/status.png)](https://drone.io/github.com/hjr265/redsync.go/latest)
 
 Redsync.go provides a Redis-based distributed mutual exclusion lock implementation for Go as described in [this](http://antirez.com/news/77) blog post. A reference library (by [antirez](https://github.com/antirez)) for Ruby is available at [github.com/antirez/redlock-rb](https://github.com/antirez/redlock-rb).
