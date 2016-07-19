@@ -231,6 +231,11 @@ func (m *Mutex) Lock() error {
 			}
 		}
 
+		// Have no delay on the last try so we can return ErrFailed sooner.
+		if i == retries-1 {
+			continue
+		}
+
 		delay := m.Delay
 		if delay == 0 {
 			delay = DefaultDelay
