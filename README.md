@@ -1,6 +1,8 @@
-# Redsync.go
+# **This package is deprecated. Please switch to [github.com/go-redsync/redsync/v4](https://github.com/go-redsync/redsync).**
 
-**This package is being replaced with https://gopkg.in/redsync.v1. I will continue to maintain this package for a while so that its users do not feel abandoned. But I request everyone to gradually switch to the other package which will be maintained more actively.**
+---
+
+# Redsync.go
 
 [![Build Status](https://drone.io/github.com/hjr265/redsync.go/status.png)](https://drone.io/github.com/hjr265/redsync.go/latest)
 
